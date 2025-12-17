@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Alert } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { RazorpayColors, RazorpayGradients } from '../theme/colors';
 import { AIOrchestrator } from '../services/aiOrchestrator';
 import { AIMemoryService } from '../services/aiMemory';
@@ -308,6 +309,21 @@ export const AIChatScreen: React.FC<AIChatScreenProps> = ({ onClose, onNavigate,
             multiline
             onSubmitEditing={handleSend}
           />
+          <TouchableOpacity
+            style={styles.voiceButton}
+            onPress={() => {
+              // Handle voice input - for now, just show a message
+              const voiceMessage: Message = {
+                id: Date.now().toString(),
+                text: 'Voice input feature coming soon!',
+                isUser: false,
+                timestamp: new Date(),
+              };
+              setMessages((prev) => [...prev, voiceMessage]);
+            }}
+          >
+            <Ionicons name="mic" size={24} color={RazorpayColors.white} />
+          </TouchableOpacity>
           <TouchableOpacity style={styles.sendButton} onPress={() => handleSend()}>
             <LinearGradient
               colors={RazorpayGradients.primary}
@@ -406,6 +422,20 @@ const styles = StyleSheet.create({
     marginRight: 12,
     fontSize: 16,
     maxHeight: 100,
+  },
+  voiceButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: RazorpayColors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    elevation: 2,
+    shadowColor: RazorpayColors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
   sendButton: {
     borderRadius: 24,

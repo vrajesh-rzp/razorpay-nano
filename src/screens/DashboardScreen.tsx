@@ -79,6 +79,13 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     }
   };
 
+  const handleChatFocus = () => {
+    // Open chat when any element of the chat panel comes into focus
+    if (onOpenChat) {
+      onOpenChat();
+    }
+  };
+
   const handleSendMessage = (message: string) => {
     // Open chat with the message when user sends from input bar
     if (onOpenChat) {
@@ -213,7 +220,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         </ScrollView>
 
         {/* Voice Input Bar */}
-        <VoiceInputBar onSend={handleSendMessage} onVoiceInput={handleVoiceInput} />
+        <VoiceInputBar
+          onSend={handleSendMessage}
+          onVoiceInput={handleVoiceInput}
+          onFocus={handleChatFocus}
+        />
       </View>
 
       {/* Date Range Filter Modal */}
