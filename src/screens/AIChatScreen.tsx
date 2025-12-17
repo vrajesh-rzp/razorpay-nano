@@ -11,7 +11,10 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Alert } from 'react-native';
 import { RazorpayColors, RazorpayGradients } from '../theme/colors';
+import { AIOrchestrator } from '../services/aiOrchestrator';
+import { AIMemoryService } from '../services/aiMemory';
 
 interface Message {
   id: string;
@@ -23,19 +26,173 @@ interface Message {
 interface AIChatScreenProps {
   onClose: () => void;
   onNavigate: (screen: string) => void;
+  initialMessage?: string;
 }
 
-export const AIChatScreen: React.FC<AIChatScreenProps> = ({ onClose, onNavigate }) => {
+export const AIChatScreen: React.FC<AIChatScreenProps> = ({ onClose, onNavigate, initialMessage }) => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: "Hello! I'm your AI assistant for Razorpay Nano. How can I help you today?",
+      text: "Hello! I'm your AI assistant for Razorpay Nano. I can help you:\n\n• Create payment links\n• Make payouts to vendors\n• View reports and summaries\n• Send reminders\n• Reconcile payments\n\nWhat would you like to do?",
       isUser: false,
       timestamp: new Date(),
     },
   ]);
   const [inputText, setInputText] = useState('');
   const flatListRef = useRef<FlatList>(null);
+
+  const generateAIResponse = async (input: string): Promise<{ text: string; action?: string; data?: any }> => {
+    // Use AI Orchestrator to classify intent
+    const intent = AIOrchestrator.classifyIntent(input);
+    
+    // Perform risk checks
+    const riskCheck = AIOrchestrator.performRiskChecks(intent);
+    if (!riskCheck.safe) {
+      return {
+        text: riskCheck.message || 'This action requires additional verification.',
+      };
+    }
+
+    // Generate response based on intent
+    const response = AIOrchestrator.generateResponse(intent);
+
+    // Handle entity resolution for ambiguous cases
+    if (intent.type === 'collect_payment_link' && intent.entities.customer) {
+      const matches = AIOrchestrator.resolveContact(intent.entities.customer, 'customer');
+      if (matches.length > 1) {
+        return {
+          text: `I found multiple contacts matching "${intent.entities.customer}":\n\n${matches.map((m, i) => `${i + 1}. ${m.name}${m.phone ? ` (${m.phone})` : ''}`).join('\n')}\n\nWhich one should I use?`,
+          action: 'resolve_contact',
+          data: { matches, intent },
+        };
+      } else if (matches.length === 0) {
+        return {
+          text: `I couldn't find "${intent.entities.customer}" in your contacts. Would you like to create a payment link for a new customer?`,
+          action: 'new_customer',
+          data: intent.entities,
+        };
+      }
+    }
+
+    if (intent.type === 'pay_vendor' && intent.entities.vendor) {
+      const matches = AIOrchestrator.resolveContact(intent.entities.vendor, 'vendor');
+      if (matches.length > 1) {
+        return {
+          text: `I found multiple vendors matching "${intent.entities.vendor}":\n\n${matches.map((m, i) => `${i + 1}. ${m.name}${m.phone ? ` (${m.phone})` : ''}`).join('\n')}\n\nWhich one should I pay?`,
+          action: 'resolve_vendor',
+          data: { matches, intent },
+        };
+      }
+    }
+
+    // Learn from pattern
+    if (intent.entities.customer && intent.entities.amount) {
+      await AIMemoryService.addPattern({
+        customerName: intent.entities.customer,
+        typicalAmountRange: {
+          min: intent.entities.amount * 0.8,
+          max: intent.entities.amount * 1.2,
+        },
+        category: intent.entities.reason || 'general',
+        frequency: 1,
+        lastUsed: Date.now(),
+      });
+    }
+
+    return response;
+  };
+
+  const handleAction = (action: string, data?: any) => {
+    switch (action) {
+      case 'create_payment_link':
+        // Navigate to accept payment screen with pre-filled data
+        setTimeout(() => {
+          onNavigate('acceptPayment');
+        }, 500);
+        break;
+
+      case 'show_qr':
+        setTimeout(() => {
+          onNavigate('acceptPayment');
+        }, 500);
+        break;
+
+      case 'show_reminders':
+      case 'show_pending':
+        setTimeout(() => {
+          onNavigate('reminders');
+        }, 500);
+        break;
+
+      case 'confirm_payout':
+        // Show confirmation dialog
+        Alert.alert(
+          'Confirm Payout',
+          data?.text || `Pay ₹${data?.amount?.toLocaleString('en-IN')} to ${data?.vendor?.name}?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Confirm',
+              onPress: () => {
+                // Execute payout
+                const confirmMessage: Message = {
+                  id: Date.now().toString(),
+                  text: `Payout of ₹${data.amount.toLocaleString('en-IN')} to ${data.vendor.name} initiated successfully!`,
+                  isUser: false,
+                  timestamp: new Date(),
+                };
+                setMessages((prev) => [...prev, confirmMessage]);
+                setTimeout(() => {
+                  onNavigate('makePayment');
+                }, 1000);
+              },
+            },
+          ]
+        );
+        break;
+
+      case 'show_reports':
+      case 'show_reconciliation':
+        setTimeout(() => {
+          onNavigate('reports');
+        }, 500);
+        break;
+
+      case 'makePayment':
+        setTimeout(() => {
+          onNavigate('makePayment');
+        }, 500);
+        break;
+
+      case 'acceptPayment':
+        setTimeout(() => {
+          onNavigate('acceptPayment');
+        }, 500);
+        break;
+
+      case 'reports':
+        setTimeout(() => {
+          onNavigate('reports');
+        }, 500);
+        break;
+
+      case 'reminders':
+        setTimeout(() => {
+          onNavigate('reminders');
+        }, 500);
+        break;
+
+      default:
+        break;
+    }
+  };
+
+  useEffect(() => {
+    // If there's an initial message, send it automatically
+    if (initialMessage) {
+      handleSend(initialMessage);
+    }
+  }, [initialMessage]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -45,72 +202,48 @@ export const AIChatScreen: React.FC<AIChatScreenProps> = ({ onClose, onNavigate 
     }
   }, [messages]);
 
-  const handleSend = () => {
-    if (!inputText.trim()) return;
+  const handleSend = (text?: string) => {
+    const messageText = text || inputText.trim();
+    if (!messageText) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
-      text: inputText,
+      text: messageText,
       isUser: true,
       timestamp: new Date(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    setInputText('');
+    if (!text) {
+      setInputText('');
+    }
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse = generateAIResponse(inputText.toLowerCase());
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: aiResponse.text,
-        isUser: false,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, aiMessage]);
+    // Generate AI response using orchestrator
+    setTimeout(async () => {
+      try {
+        const aiResponse = await generateAIResponse(messageText);
+        const aiMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          text: aiResponse.text,
+          isUser: false,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, aiMessage]);
 
-      // Navigate if needed
-      if (aiResponse.action) {
-        setTimeout(() => {
-          onNavigate(aiResponse.action!);
-        }, 500);
+        // Handle actions
+        if (aiResponse.action) {
+          handleAction(aiResponse.action, aiResponse.data);
+        }
+      } catch (error) {
+        const errorMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          text: 'Sorry, I encountered an error. Please try again.',
+          isUser: false,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, errorMessage]);
       }
     }, 1000);
-  };
-
-  const generateAIResponse = (input: string): { text: string; action?: string } => {
-    if (input.includes('payment') && input.includes('vendor')) {
-      return {
-        text: "I'll help you make a payment to your vendor. Opening the payment screen...",
-        action: 'makePayment',
-      };
-    }
-    if (input.includes('payment') && (input.includes('customer') || input.includes('receive'))) {
-      return {
-        text: "I'll help you accept a payment from a customer. Opening the payment acceptance screen...",
-        action: 'acceptPayment',
-      };
-    }
-    if (input.includes('report')) {
-      return {
-        text: "I'll show you your daily reports. Opening the reports screen...",
-        action: 'reports',
-      };
-    }
-    if (input.includes('reminder')) {
-      return {
-        text: "I'll help you send payment reminders. Opening the reminders screen...",
-        action: 'reminders',
-      };
-    }
-    if (input.includes('hello') || input.includes('hi')) {
-      return {
-        text: 'Hello! I can help you with payments, reports, and reminders. What would you like to do?',
-      };
-    }
-    return {
-      text: "I understand you're asking about: " + input + ". I can help you with making payments, accepting payments, viewing reports, or sending reminders. What would you like to do?",
-    };
   };
 
   const renderMessage = ({ item }: { item: Message }) => (
@@ -175,7 +308,7 @@ export const AIChatScreen: React.FC<AIChatScreenProps> = ({ onClose, onNavigate 
             multiline
             onSubmitEditing={handleSend}
           />
-          <TouchableOpacity style={styles.sendButton} onPress={handleSend}>
+          <TouchableOpacity style={styles.sendButton} onPress={() => handleSend()}>
             <LinearGradient
               colors={RazorpayGradients.primary}
               style={styles.sendButtonGradient}

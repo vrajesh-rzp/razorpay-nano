@@ -5,6 +5,7 @@ import { Account } from '../types';
 const ACCOUNTS_KEY = '@razorpay_nano:accounts';
 const BIOMETRIC_ENABLED_KEY = '@razorpay_nano:biometric_enabled';
 const CURRENT_USER_KEY = '@razorpay_nano:current_user';
+const ONBOARDING_COMPLETED_KEY = '@razorpay_nano:onboarding_completed';
 
 // Helper function to sanitize email for SecureStore key
 // SecureStore keys must only contain alphanumeric characters, ".", "-", and "_"
@@ -85,6 +86,16 @@ export const StorageService = {
   async getCurrentUser(): Promise<Account | null> {
     const data = await AsyncStorage.getItem(CURRENT_USER_KEY);
     return data ? JSON.parse(data) : null;
+  },
+
+  // Onboarding
+  async setOnboardingCompleted(completed: boolean): Promise<void> {
+    await AsyncStorage.setItem(ONBOARDING_COMPLETED_KEY, JSON.stringify(completed));
+  },
+
+  async isOnboardingCompleted(): Promise<boolean> {
+    const data = await AsyncStorage.getItem(ONBOARDING_COMPLETED_KEY);
+    return data ? JSON.parse(data) : false;
   },
 };
 
